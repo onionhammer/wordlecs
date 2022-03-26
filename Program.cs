@@ -1,8 +1,9 @@
 ﻿using wordleword;
 using Spectre.Console;
 using System.Threading.Channels;
-using System.Diagnostics;
+using MathNet.Numerics.Statistics;
 using static System.Diagnostics.Debug;
+using System.Text.Json;
 
 Assert(Enumerable.SequenceEqual(Wordle.MakeGuess("abcde", "abcde"), new [] { 'g', 'g', 'g', 'g', 'g' }));
 Assert(Enumerable.SequenceEqual(Wordle.MakeGuess("abcde", "xbcde"), new [] { '-', 'g', 'g', 'g', 'g' }));
@@ -18,24 +19,41 @@ await AnsiConsole
     {
         var words = await Wordlist
             .OpenAsync("wordlist.csv")
-            .OrderBy(word => word) // Sort alphabetically
-            .ToHashSetAsync();
+            .ToListAsync();
+
+        var possibleSolutions = await Wordlist
+            .OpenAsync("solutions.csv")
+            .ToListAsync();
 
         // Foreach word, test how many wordle matches it has against all the other words
-        var channel = Channel.CreateUnbounded<(string word, int matches)>();
+        var channel = Channel.CreateUnbounded<GuessResult>();
+
+        ctx.Status($"Started {words.Count} word tests");
 
         // Start a child task to test each word
-        var task = Task.Factory.StartNew(() =>
+        _ = Task.Factory.StartNew(() =>
         {
-            Parallel.ForEach(
-                words,
-                parallelOptions: new ()
+            Parallel.ForEach(words, body: guess =>
                 {
-                    MaxDegreeOfParallelism = Environment.ProcessorCount,
-                },
-                body: (word, state) =>
-                {
-                    while (!channel.Writer.TryWrite((word, 5)))
+                    var counts = new List<double>(capacity: possibleSolutions.Count);
+
+                    foreach (var word in possibleSolutions)
+                    {
+                        var pattern = Wordle.MakeGuess(word, guess);
+                        var matches = 0;
+
+                        foreach (var other in possibleSolutions)
+                        {
+                            if (Wordle.CheckWord(other, guess, pattern))
+                                ++matches;
+                        }
+
+                        counts.Add(matches);
+                    }
+
+                    GuessResult result = new (guess, counts.Average(), counts.Median(), counts.StandardDeviation());
+
+                    while (!channel.Writer.TryWrite(result))
                         Thread.SpinWait(1);
                 });
 
@@ -43,13 +61,52 @@ await AnsiConsole
         });
 
         // Read the results
-        var results = new List<(string word, int matches)>();
-        await foreach (var (guess, count) in channel.Reader.ReadAllAsync())
+        var results = new List<GuessResult>();
+        await foreach (var result in channel.Reader.ReadAllAsync())
         {
-            ctx.Status($"{guess} - {count} matches");
-            results.Add((guess, count));
+            ctx.Status($"{result.Guess} - {result.Mean} matches");
+            results.Add(result);
         }
 
-        await task;
+        ctx.Status("Outputting results");
+
+        // Sort the results
+        results.Sort((a, b) => b.Mean.CompareTo(a.Mean));
+
+        await using var fs = File.OpenWrite("results.csv");
+        await using var sw = new StreamWriter(fs);
+        await sw.WriteLineAsync("Guess,Mean,Median,StdDev");
+        foreach (var result in results)
+            await sw.WriteLineAsync($"{result.Guess},{result.Mean},{result.Median},{result.Std}");
+
+        ctx.Status("Get a graph for SOARE");
+
+        /* Get a graph for SOARE */
+        Channel<int> soareCounts = Channel.CreateUnbounded<int>();
+        _ = Task.Factory.StartNew(() =>
+        {
+            Parallel.ForEach(possibleSolutions, word => 
+            {
+                var pattern = Wordle.MakeGuess(word, "soare");
+                var matches = possibleSolutions
+                    .Where((other) => Wordle.CheckWord(other, "soare", pattern))
+                    .Count();
+
+                while (!soareCounts.Writer.TryWrite(matches))
+                    Thread.SpinWait(1);
+            });
+
+            soareCounts.Writer.Complete();
+        });
+
+        await using (var soarFile = File.OpenWrite("soare.data"))
+        {
+            await JsonSerializer.SerializeAsync(
+                soarFile, soareCounts.Reader.ReadAllAsync(), 
+                new JsonSerializerOptions { WriteIndented = true });
+        }
+
         ctx.Status("Done");
     });
+
+record struct GuessResult(string Guess, double Mean, double Median, double Std);

@@ -7,11 +7,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <!-- Copy wordlist.csv to output -->
+  <!-- Copy csvs to output -->
   <ItemGroup>
     <CopyToOutputDirectory Include="wordlist.csv" CopyToOutput="Always" />
+    <CopyToOutputDirectory Include="solutions.csv" CopyToOutput="Always" />
   </ItemGroup>
+
   <ItemGroup>
+    <PackageReference Include="MathNet.Numerics" Version="4.15.0" />
     <PackageReference Include="Spectre.Console" Version="0.43.0" />
     <PackageReference Include="System.Linq.Async" Version="6.0.1" />
   </ItemGroup>
