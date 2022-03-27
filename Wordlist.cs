@@ -1,20 +1,21 @@
-using System.Runtime.CompilerServices;
-
 namespace wordleword;
 
 class Wordlist
 {
-    public async static IAsyncEnumerable<string> OpenAsync(
+    public async static Task<List<string>> OpenAsync(
         string filename,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
         // Read words from CSV file
         using var reader = new StreamReader(filename);
+        var list = new List<string>();
 
         while (!reader.EndOfStream && !cancellationToken.IsCancellationRequested)
         {
             if (await reader.ReadLineAsync() is string result)
-                yield return result;
+                list.Add(result);
         }
+
+        return list;
     }
 }

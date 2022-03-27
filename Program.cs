@@ -1,34 +1,35 @@
-﻿using wordleword;
-using Spectre.Console;
+﻿using Spectre.Console;
 using System.Text.Json;
 using System.Threading.Channels;
 using MathNet.Numerics.Statistics;
+using static wordleword.Wordle;
 using static System.Diagnostics.Debug;
 
-Assert(Enumerable.SequenceEqual(Wordle.MakeGuess("abcde", "abcde"), new [] { 'g', 'g', 'g', 'g', 'g' }));
-Assert(Enumerable.SequenceEqual(Wordle.MakeGuess("abcde", "xbcde"), new [] { '-', 'g', 'g', 'g', 'g' }));
-Assert(Enumerable.SequenceEqual(Wordle.MakeGuess("abcde", "edcba"), new [] { 'y', 'y', 'g', 'y', 'y' }));
-Assert(Enumerable.SequenceEqual(Wordle.MakeGuess("xxxxx", "abcde"), new [] { '-', '-', '-', '-', '-' }));
-Assert(Enumerable.SequenceEqual(Wordle.MakeGuess("aabbc", "abcde"), new [] { 'g', 'y', 'y', '-', '-' }));
-Assert(Enumerable.SequenceEqual(Wordle.MakeGuess("aaabb", "aabbb"), new [] { 'g', 'g', '-', 'g', 'g' }));
-Assert(Enumerable.SequenceEqual(Wordle.MakeGuess("perky", "peers"), new [] { 'g', 'g', '-', 'y', '-' }));
+Assert(Enumerable.SequenceEqual(MakeGuess("abcde", "abcde"), new [] { 'g', 'g', 'g', 'g', 'g' }));
+Assert(Enumerable.SequenceEqual(MakeGuess("abcde", "xbcde"), new [] { '-', 'g', 'g', 'g', 'g' }));
+Assert(Enumerable.SequenceEqual(MakeGuess("abcde", "edcba"), new [] { 'y', 'y', 'g', 'y', 'y' }));
+Assert(Enumerable.SequenceEqual(MakeGuess("xxxxx", "abcde"), new [] { '-', '-', '-', '-', '-' }));
+Assert(Enumerable.SequenceEqual(MakeGuess("aabbc", "abcde"), new [] { 'g', 'y', 'y', '-', '-' }));
+Assert(Enumerable.SequenceEqual(MakeGuess("aaabb", "aabbb"), new [] { 'g', 'g', '-', 'g', 'g' }));
+Assert(Enumerable.SequenceEqual(MakeGuess("perky", "peers"), new [] { 'g', 'g', '-', 'y', '-' }));
 
+Assert(CheckWord("abcde", "abcde", new [] { 'g', 'g', 'g', 'g', 'g' }));
+Assert(!CheckWord("abcde", "abcde", new [] { 'g', 'g', 'g', 'g', 'y' }));
+Assert(!CheckWord("abcde", "abcde", new [] { 'g', 'g', 'g', 'g', '-' }));
+Assert(CheckWord("axxxx", "abcde", new [] { 'g', '-', '-', '-', '-' }));
+Assert(CheckWord("abcde", "axxbb", new [] { 'g', '-', '-', 'y', '-' }));
 
 await AnsiConsole
     .Status()
     .StartAsync("Loading word list...", async ctx =>
     {
-        var words = await Wordlist
-            .OpenAsync("wordlist.csv")
-            .ToListAsync();
-
-        var possibleSolutions = await Wordlist
-            .OpenAsync("solutions.csv")
-            .ToListAsync();
+        var words = await wordleword.Wordlist.OpenAsync("wordlist.csv");
+        var possibleSolutions = await wordleword.Wordlist.OpenAsync("solutions.csv");
 
         // Foreach word, test how many wordle matches it has against all the other words
         var guessChannel = Channel.CreateUnbounded<GuessResult>();
-        var wordsGuessed = 0;
+        var statCheckWord = Channel.CreateUnbounded<long>();
+        var wordsGuessed  = 0L;
 
         ctx.Status($"Started {words.Count:n0} word tests");
 
@@ -42,29 +43,42 @@ await AnsiConsole
                 parallelOptions: new() { MaxDegreeOfParallelism = Environment.ProcessorCount },
                 body: (guess) =>
                 {
+                    var solutionsRun = 0;
                     var counts = new List<double>(capacity: possibleSolutions.Count);
                     Span<char> pattern = stackalloc char[5];
 
                     foreach (var word in possibleSolutions)
                     {
-                        Wordle.Zero.CopyTo(pattern);
-                        Wordle.MakeGuess(word, guess, ref pattern);
+                        Zero.CopyTo(pattern);
+                        MakeGuess(word, guess, ref pattern);
                         var matches = 0;
 
                         foreach (var other in possibleSolutions)
                         {
-                            if (Wordle.CheckWord(other, guess, pattern))
+                            if (CheckWord(other, guess, pattern))
                                 ++matches;
+
+                            ++solutionsRun;
                         }
 
                         counts.Add(matches);
-                        Interlocked.Increment(ref wordsGuessed);
+
+                        // Only increment every few iterations since this is a slower operation
+                        if (solutionsRun % 5_000 == 0)
+                        {
+                            statCheckWord.Writer.TryWrite(solutionsRun);
+                            solutionsRun = 0;
+                        }
                     }
+
+                    statCheckWord.Writer.TryWrite(solutionsRun);
 
                     GuessResult result = new (guess, counts.Average(), counts.Median(), counts.StandardDeviation());
 
                     while (!guessChannel.Writer.TryWrite(result))
                         Thread.SpinWait(1);
+
+                    Interlocked.Increment(ref wordsGuessed);
                 });
 
             guessChannel.Writer.Complete();
@@ -74,21 +88,28 @@ await AnsiConsole
         // Sampler
         _ = Task.Run(async () => 
         {
-            var last = 0;
-            var sinceLast = new Queue<int>(10);
+            var checkWordAvgQueue = new Queue<long>(10);
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
             while (!completion.Task.IsCompleted)
             {
                 await Task.Delay(1_000);
 
-                if (sinceLast.Count == 10)
-                    sinceLast.Dequeue();
+                // Calculate the CheckWord/s average
+                var checkWordsRun = 0L;
+                while (statCheckWord.Reader.TryRead(out var count))
+                    checkWordsRun += count;
+
+                if (checkWordAvgQueue.Count == 10)
+                    checkWordAvgQueue.Dequeue();
+                checkWordAvgQueue.Enqueue(checkWordsRun);
+
+                // Calculate the words/minute average
+                var wordsPerMinute = wordsGuessed / stopwatch.Elapsed.TotalMinutes;
                 
-                sinceLast.Enqueue(wordsGuessed - last);
-                last = wordsGuessed;
-                var diff = sinceLast.Sum() / sinceLast.Count;
+                var diff = checkWordAvgQueue.Sum() / checkWordAvgQueue.Count;
                 
-                ctx.Status($"{wordsGuessed:n0} words tested, {diff:n0} words/s");
+                ctx.Status($"{wordsGuessed:n0} 'words' tested at {wordsPerMinute:n0} words/min, averaging {diff:n0} CheckWord/sec");
             }
         });
 
@@ -96,7 +117,7 @@ await AnsiConsole
         var results = new List<GuessResult>();
         await foreach (var result in guessChannel.Reader.ReadAllAsync())
         {
-            AnsiConsole.MarkupLine($"{result.Guess} - {result.Mean} matches");
+            AnsiConsole.MarkupLine($"{result.Guess} - {result.Mean:n0} matches");
             results.Add(result);
         }
 
@@ -123,12 +144,12 @@ await AnsiConsole
                 body: word => 
                 {
                     Span<char> pattern = stackalloc char[] { '-', '-', '-', '-', '-' };
-                    Wordle.MakeGuess(word, "soare", ref pattern);
+                    MakeGuess(word, "soare", ref pattern);
 
                     var matches = 0;
                     foreach (var other in possibleSolutions)
                     {
-                        if (Wordle.CheckWord(other, "soare", pattern))
+                        if (CheckWord(other, "soare", pattern))
                             ++matches;
                     }
 

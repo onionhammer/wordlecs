@@ -29,23 +29,21 @@ public class Wordle
     /// <param name="pattern">The pattern to fill in (like ['g', 'g', '-', 'y', '-'])</param>
     public static void MakeGuess(string word, string guess, ref Span<char> ret)
     {
-        var remaining = "";
+        Span<char> remaining = stackalloc char[guess.Length];
         for (var i = 0; i < 5; i++)
         {
             if (word[i] == guess[i])
                 ret[i] = 'g';
             else
-                remaining += word[i];
+                remaining[i] = word[i];
         }
 
         for (var i = 0; i < 5; i++)
         {
             var loc = remaining.IndexOf(guess[i]);
+
             if (ret[i] != 'g' && loc != -1)
-            {
                 ret[i] = 'y';
-                remaining = string.Concat(remaining.AsSpan(0, loc), remaining.AsSpan(loc + 1));
-            }
         }
     }
 
@@ -58,7 +56,7 @@ public class Wordle
     /// <returns>true if the word matches the guess given the pattern</returns>
     public static bool CheckWord(string word, string guess, Span<char> pattern)
     {
-        var remaining = "";
+        Span<char> remaining = stackalloc char[guess.Length];
 
         for (var i = 0; i < 5; ++i)
         {
@@ -75,7 +73,7 @@ public class Wordle
                 if (g == w)
                     return false;
                 else
-                    remaining += w;
+                    remaining[i] = w;
             }
         }
 
@@ -86,8 +84,6 @@ public class Wordle
                 var loc = remaining.IndexOf(guess[i]);
                 if (loc == -1)
                     return false;
-                else
-                    remaining = string.Concat(remaining.AsSpan(0, loc), remaining.AsSpan(loc + 1));
             }
         }
 
