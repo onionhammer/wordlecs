@@ -110,7 +110,7 @@ await AnsiConsole
                 
                 var diff = checkWordAvgQueue.Sum() / checkWordAvgQueue.Count;
                 
-                ctx.Status($"{wordsGuessed:n0} 'words' tested out of {total} at {wordsPerMinute:n0} words/min, averaging {diff:n0} CheckWord/sec. "
+                ctx.Status($"{wordsGuessed:n0} 'words' tested out of {total:n0} at {wordsPerMinute:n0} words/min, averaging {diff:n0} CheckWord/sec. "
                          + $"{total - wordsGuessed:n0} words left, remaining time: {(total - wordsGuessed) / wordsPerMinute:n0} minutes");
             }
         });
