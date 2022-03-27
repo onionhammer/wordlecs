@@ -88,8 +88,9 @@ await AnsiConsole
         // Sampler
         _ = Task.Run(async () => 
         {
-            var checkWordAvgQueue = new Queue<long>(10);
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var total = possibleSolutions.Count;
+            var checkWordAvgQueue = new Queue<long>(10);
 
             while (!completion.Task.IsCompleted)
             {
@@ -109,7 +110,8 @@ await AnsiConsole
                 
                 var diff = checkWordAvgQueue.Sum() / checkWordAvgQueue.Count;
                 
-                ctx.Status($"{wordsGuessed:n0} 'words' tested at {wordsPerMinute:n0} words/min, averaging {diff:n0} CheckWord/sec");
+                ctx.Status($"{wordsGuessed:n0} 'words' tested out of {total} at {wordsPerMinute:n0} words/min, averaging {diff:n0} CheckWord/sec. "
+                         + $"{total - wordsGuessed:n0} words left, remaining time: {(total - wordsGuessed) / wordsPerMinute:n0} minutes");
             }
         });
 
