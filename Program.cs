@@ -128,7 +128,7 @@ await AnsiConsole
         // Sort the results
         results.Sort((a, b) => a.Median.CompareTo(b.Median));
 
-        await using var fs = File.OpenWrite("results.csv");
+        await using var fs = File.Open("results.csv", FileMode.Create);
         await using var sw = new StreamWriter(fs);
         await sw.WriteLineAsync("Guess,Mean,Median,StdDev");
         foreach (var result in results)
@@ -162,7 +162,7 @@ await AnsiConsole
             soareCountChannel.Writer.Complete();
         });
 
-        await using (var soarFile = File.OpenWrite("soare.data"))
+        await using (var soarFile = File.Open("soare.data", FileMode.Create))
         {
             await JsonSerializer.SerializeAsync(
                 soarFile, soareCountChannel.Reader.ReadAllAsync(), 
