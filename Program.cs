@@ -13,6 +13,7 @@ Assert(Enumerable.SequenceEqual(Wordle.MakeGuess("aabbc", "abcde"), new [] { 'g'
 Assert(Enumerable.SequenceEqual(Wordle.MakeGuess("aaabb", "aabbb"), new [] { 'g', 'g', '-', 'g', 'g' }));
 Assert(Enumerable.SequenceEqual(Wordle.MakeGuess("perky", "peers"), new [] { 'g', 'g', '-', 'y', '-' }));
 
+
 await AnsiConsole
     .Status()
     .StartAsync("Loading word list...", async ctx =>
@@ -42,10 +43,12 @@ await AnsiConsole
                 body: (guess) =>
                 {
                     var counts = new List<double>(capacity: possibleSolutions.Count);
+                    Span<char> pattern = stackalloc char[5];
 
                     foreach (var word in possibleSolutions)
                     {
-                        var pattern = Wordle.MakeGuess(word, guess);
+                        Wordle.Zero.CopyTo(pattern);
+                        Wordle.MakeGuess(word, guess, ref pattern);
                         var matches = 0;
 
                         foreach (var other in possibleSolutions)
@@ -71,16 +74,21 @@ await AnsiConsole
         // Sampler
         _ = Task.Run(async () => 
         {
-            var sinceLast = 0;
+            var last = 0;
+            var sinceLast = new Queue<int>(10);
 
             while (!completion.Task.IsCompleted)
             {
                 await Task.Delay(1_000);
 
-                var diff = wordsGuessed - sinceLast;
+                if (sinceLast.Count == 10)
+                    sinceLast.Dequeue();
+                
+                sinceLast.Enqueue(wordsGuessed - last);
+                last = wordsGuessed;
+                var diff = sinceLast.Sum() / sinceLast.Count;
                 
                 ctx.Status($"{wordsGuessed:n0} words tested, {diff:n0} words/s");
-                sinceLast = wordsGuessed;
             }
         });
 
@@ -114,10 +122,15 @@ await AnsiConsole
                 parallelOptions: new() { MaxDegreeOfParallelism = Environment.ProcessorCount },
                 body: word => 
                 {
-                    var pattern = Wordle.MakeGuess(word, "soare");
-                    var matches = possibleSolutions
-                        .Where((other) => Wordle.CheckWord(other, "soare", pattern))
-                        .Count();
+                    Span<char> pattern = stackalloc char[] { '-', '-', '-', '-', '-' };
+                    Wordle.MakeGuess(word, "soare", ref pattern);
+
+                    var matches = 0;
+                    foreach (var other in possibleSolutions)
+                    {
+                        if (Wordle.CheckWord(other, "soare", pattern))
+                            ++matches;
+                    }
 
                     while (!soareCountChannel.Writer.TryWrite(matches))
                         Thread.SpinWait(1);

@@ -4,6 +4,8 @@ namespace wordleword;
 
 public class Wordle
 {
+    public static readonly char[] Zero = { '-', '-', '-', '-', '-' };
+
     /// <summary>
     /// Make a guess
     /// </summary>
@@ -12,8 +14,21 @@ public class Wordle
     /// <returns>Green and yellow array of indicators (like ['g', 'g', '-', 'y', '-'])</returns>
     public static char[] MakeGuess(string word, string guess)
     {
-        var ret = new char[] { '-', '-', '-', '-', '-' };
+        Span<char> pattern = stackalloc char[] { '-', '-', '-', '-', '-' };
 
+        MakeGuess(word, guess, ref pattern);
+
+        return pattern.ToArray();
+    }
+
+    /// <summary>
+    /// Make a guess
+    /// </summary>
+    /// <param name="word">The word to guess (like "perky")</param>
+    /// <param name="guess">The guess (like "peers")</param>
+    /// <param name="pattern">The pattern to fill in (like ['g', 'g', '-', 'y', '-'])</param>
+    public static void MakeGuess(string word, string guess, ref Span<char> ret)
+    {
         var remaining = "";
         for (var i = 0; i < 5; i++)
         {
@@ -32,8 +47,6 @@ public class Wordle
                 remaining = string.Concat(remaining.AsSpan(0, loc), remaining.AsSpan(loc + 1));
             }
         }
-
-        return ret;
     }
 
     /// <summary>
@@ -43,7 +56,7 @@ public class Wordle
     /// <param name="guess">word like "peers"</param>
     /// <param name="pattern">like ["g", "g", "-", "y", "-"]</param>
     /// <returns>true if the word matches the guess given the pattern</returns>
-    public static bool CheckWord(string word, string guess, char[] pattern)
+    public static bool CheckWord(string word, string guess, Span<char> pattern)
     {
         var remaining = "";
 
