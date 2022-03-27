@@ -4,3 +4,5 @@
 - Install it
 - Clone this
 - Run `dotnet -c release`
+
+Based on [Taylor Reece's blog](https://blog.reecemath.com/best-and-worst-wordle-words) and [node.js source code](https://github.com/taylorreece/wordle)
