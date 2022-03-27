@@ -119,7 +119,7 @@ await AnsiConsole
         var results = new List<GuessResult>();
         await foreach (var result in guessChannel.Reader.ReadAllAsync())
         {
-            AnsiConsole.MarkupLine($"{result.Guess} - {result.Mean:n0} matches");
+            AnsiConsole.MarkupLine($"{result.Guess} - {result.Median:n0} median");
             results.Add(result);
         }
 
