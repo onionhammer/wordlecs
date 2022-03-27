@@ -89,7 +89,7 @@ await AnsiConsole
         _ = Task.Run(async () => 
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-            var total = possibleSolutions.Count;
+            var total = words.Count;
             var checkWordAvgQueue = new Queue<long>(10);
 
             while (!completion.Task.IsCompleted)
