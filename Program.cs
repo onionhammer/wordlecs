@@ -126,7 +126,7 @@ await AnsiConsole
         ctx.Status("Outputting results");
 
         // Sort the results
-        results.Sort((a, b) => a.Mean.CompareTo(b.Mean));
+        results.Sort((a, b) => a.Median.CompareTo(b.Median));
 
         await using var fs = File.OpenWrite("results.csv");
         await using var sw = new StreamWriter(fs);
