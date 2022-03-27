@@ -71,10 +71,16 @@ await AnsiConsole
         // Sampler
         _ = Task.Run(async () => 
         {
+            var sinceLast = 0;
+
             while (!completion.Task.IsCompleted)
             {
                 await Task.Delay(1_000);
-                ctx.Status($"{wordsGuessed:n0} words tested");
+
+                var diff = wordsGuessed - sinceLast;
+                
+                ctx.Status($"{wordsGuessed:n0} words tested, {diff:n0} words/s");
+                sinceLast = wordsGuessed;
             }
         });
 
