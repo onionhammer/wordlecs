@@ -43,7 +43,8 @@ await AnsiConsole
                 parallelOptions: new() { MaxDegreeOfParallelism = Environment.ProcessorCount },
                 body: (guess) =>
                 {
-                    var counts = new List<double>(capacity: possibleSolutions.Count);
+                    var numSolutions = possibleSolutions.Count;
+                    var counts = new List<double>(capacity: numSolutions);
                     Span<char> pattern = stackalloc char[5];
 
                     foreach (var word in possibleSolutions)
@@ -61,7 +62,7 @@ await AnsiConsole
                         counts.Add(matches);
                     }
 
-                    statCheckWord.Writer.TryWrite(possibleSolutions.Count * possibleSolutions.Count);
+                    statCheckWord.Writer.TryWrite(numSolutions * numSolutions);
 
                     GuessResult result = new (guess, counts.Average(), counts.Median(), counts.StandardDeviation());
 
